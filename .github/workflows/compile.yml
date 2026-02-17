@@ -1,7 +1,6 @@
 name: Compile C Libraries for Linux
 on: [push, workflow_dispatch]
 
-# This is the critical part to fix the 403 error
 permissions:
   contents: write
 
@@ -11,18 +10,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # This ensures the bot uses a token with write access
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compile Libraries
         run: |
+          # Compile Game, TicTacToe, and Minesweeper
           gcc -shared -o game.so -fPIC game.c
           gcc -shared -o tictactoe.so -fPIC tictactoe.c
+          gcc -shared -o minesweeper.so -fPIC minesweeper.c
 
       - name: Commit and Push .so files
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add game.so tictactoe.so
-          git commit -m "Add compiled Linux libraries (.so)" || echo "No changes to commit"
+          
+          # Add all compiled shared objects
+          git add game.so tictactoe.so minesweeper.so
+          
+          # Only commit if there are actual binary changes
+          git commit -m "Update compiled Linux libraries (.so)" || echo "No changes to commit"
           git push
