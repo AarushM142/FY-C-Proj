@@ -1,26 +1,25 @@
 import streamlit as st
 import ctypes
 import os
+import platform
 from supabase import create_client
 
 # --- 1. SUPABASE SETUP ---
+# Note: Ensure your Streamlit Cloud Secrets has the [supabase] header or matches this structure
 try:
     supabase = create_client(st.secrets["supabase"]["url"], st.secrets["supabase"]["key"])
 except Exception:
-    st.error("Check your .streamlit/secrets.toml!")
+    st.error("Missing Secrets! Add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets.")
     st.stop()
 
 # --- 2. DATA SYNC HELPER ---
 def sync_balance_to_db():
     if 'user' not in st.session_state or not st.session_state.user:
-        print("DEBUG: No user in session_state, cannot sync")
         return False
     
     try:
         user_id = st.session_state.user.id
         balance = int(st.session_state.balance)
-        
-        print(f"DEBUG: Syncing balance - User: {user_id}, Balance: {balance}")
         
         # Use upsert to create or update the profile
         response = supabase.table("profiles").upsert({
@@ -28,26 +27,16 @@ def sync_balance_to_db():
             "balance": balance
         }).execute()
         
-        print(f"DEBUG: Upsert response data: {response.data}")
-        
         if response.data:
-            print(f"DEBUG: Successfully synced balance ${balance} to Supabase")
-            
             # Clear the balance-loaded flag so next page load fetches fresh from DB
             balance_flag = f"balance_loaded_{user_id}"
             if balance_flag in st.session_state:
                 del st.session_state[balance_flag]
-                print(f"DEBUG: Cleared balance-loaded flag for fresh DB fetch on next load")
-            
             return True
-        else:
-            print(f"DEBUG: Upsert returned no data")
-            return False
+        return False
             
     except Exception as e:
-        print(f"DEBUG: Error syncing balance to Supabase: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"DEBUG Error: {e}")
         return False
 
 # --- 3. THE MAIN APP GUARD ---
@@ -78,53 +67,68 @@ if __name__ == "__main__":
     
     # Check if user is logged in
     if 'user' not in st.session_state:
-        print("DEBUG: No user in session_state, showing login page")
         render_auth_page(supabase)
         st.stop()
-    else:
-        print(f"DEBUG: User in session_state: {st.session_state.user.id}")
 
-    # Init Balance - only fetch once per user session using a unique flag
+    # Init Balance
     user_id = st.session_state.user.id
     balance_flag = f"balance_loaded_{user_id}"
     
     if balance_flag not in st.session_state:
-        print(f"DEBUG: Balance not loaded for user {user_id}, fetching from DB")
         try:
             res = supabase.table("profiles").select("balance").eq("id", user_id).single().execute()
-            print(f"DEBUG: Database response: {res}")
             if res.data and 'balance' in res.data:
                 st.session_state.balance = res.data['balance']
-                print(f"DEBUG: Fetched balance from DB: {st.session_state.balance}")
             else:
-                print("DEBUG: No profile found in DB, defaulting to 1000")
                 st.session_state.balance = 1000
-        except Exception as e:
-            print(f"DEBUG: Error fetching balance from DB: {e}")
-            print("DEBUG: No profile exists yet, using default balance of 1000")
+        except Exception:
             st.session_state.balance = 1000
         
-        # Mark this user's balance as loaded
         st.session_state[balance_flag] = True
-    else:
-        print(f"DEBUG: Balance already loaded for user {user_id}: {st.session_state.balance}")
 
-    # Load Engines
+    # --- 4. CROSS-PLATFORM ENGINE LOADER ---
     curr_dir = os.path.dirname(os.path.abspath(__file__))
-    game_lib = ctypes.CDLL(os.path.join(curr_dir, "game.dll"), winmode=0)
-    game_lib.calculate_score.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
-    game_lib.calculate_score.restype = ctypes.c_int
-    ttt_lib = ctypes.CDLL(os.path.join(curr_dir, "tictactoe.dll"), winmode=0)
-    ttt_lib.get_cell.argtypes = [ctypes.c_int, ctypes.c_int]
-    ttt_lib.get_cell.restype = ctypes.c_char
-    ttt_lib.place_move.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_char]
-    ttt_lib.place_move.restype = ctypes.c_int
+    
+    # Detect OS and set file extensions
+    is_windows = platform.system() == "Windows"
+    game_ext = "game.dll" if is_windows else "game.so"
+    ttt_ext = "tictactoe.dll" if is_windows else "tictactoe.so"
 
-    # Sidebar
+    try:
+        # Load Game Library
+        game_path = os.path.join(curr_dir, game_ext)
+        if is_windows:
+            game_lib = ctypes.CDLL(game_path, winmode=0)
+        else:
+            game_path = "./" + game_ext # Linux often needs explicit pathing
+            game_lib = ctypes.CDLL(os.path.abspath(game_path))
+
+        # Game Lib Definitions
+        game_lib.calculate_score.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+        game_lib.calculate_score.restype = ctypes.c_int
+
+        # Load TicTacToe Library
+        ttt_path = os.path.join(curr_dir, ttt_ext)
+        if is_windows:
+            ttt_lib = ctypes.CDLL(ttt_path, winmode=0)
+        else:
+            ttt_path = "./" + ttt_ext
+            ttt_lib = ctypes.CDLL(os.path.abspath(ttt_path))
+
+        # TTT Lib Definitions
+        ttt_lib.get_cell.argtypes = [ctypes.c_int, ctypes.c_int]
+        ttt_lib.get_cell.restype = ctypes.c_char
+        ttt_lib.place_move.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_char]
+        ttt_lib.place_move.restype = ctypes.c_int
+
+    except Exception as e:
+        st.error(f"Critical Error: Could not load C-Engines. Details: {e}")
+        st.stop()
+
+    # --- 5. UI & NAVIGATION ---
     st.sidebar.title("🎰 ARCADE MENU")
     st.sidebar.metric("VAULT BALANCE", f"${st.session_state.balance}")
     
-    # Add Logout Button
     if st.sidebar.button("🚪 LOGOUT", use_container_width=True):
         st.session_state.clear()
         st.rerun()
