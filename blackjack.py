@@ -57,7 +57,7 @@ def run_blackjack(game_lib):
     st.markdown("<h1 style='text-align: center; color: #FFD700;'>BLACKJACK 21</h1>", unsafe_allow_html=True)
     # ... rest of your code ...
     
-    st.markdown("<h1 style='text-align: center; color: #FFD700;'>BLACKJACK 21</h1>", unsafe_allow_html=True)
+    
 
     if st.session_state.phase == "betting":
         st.markdown("<h3 style='text-align: center;'>PLACE YOUR WAGER</h3>", unsafe_allow_html=True)
