@@ -36,26 +36,18 @@ def render_auth_page(supabase):
             try:
                 res = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 st.session_state.user = res.user
-                print(f"DEBUG: User logged in: {res.user.id}")
                 
-                # Fetch balance immediately
-                try:
-                    profile = supabase.table("profiles").select("balance").eq("id", res.user.id).single().execute()
-                    if profile.data and 'balance' in profile.data:
-                        st.session_state.balance = profile.data['balance']
-                        print(f"DEBUG: Fetched balance: {st.session_state.balance}")
-                    else:
-                        st.session_state.balance = 1000
-                        print("DEBUG: No balance found, setting to 1000")
-                except Exception as e:
-                    print(f"DEBUG: Error fetching profile: {e}")
-                    print("DEBUG: Profile doesn't exist yet, using default balance")
+                # Fetch balance
+                profile = supabase.table("profiles").select("balance").eq("id", res.user.id).single().execute()
+                if profile.data:
+                    st.session_state.balance = profile.data['balance']
+                else:
+                    # Fallback if record somehow doesn't exist
                     st.session_state.balance = 1000
                 
                 st.success("Access Granted. Redirecting...")
                 st.rerun()
             except Exception as e:
-                print(f"DEBUG: Login error: {e}")
                 st.error("Authentication Failed: Invalid credentials.")
 
     with tab2:
@@ -70,15 +62,21 @@ def render_auth_page(supabase):
                 st.error("Security Code must be at least 6 characters.")
             else:
                 try:
+                    # 1. Sign up the user in Auth
                     res = supabase.auth.sign_up({"email": new_email, "password": new_pw})
+                    
                     if res.user:
-                        # Create a profile entry with initial balance
-                        supabase.table("profiles").insert({
+                        # 2. Use UPSERT instead of INSERT
+                        # This prevents the 'duplicate key' error 23505
+                        supabase.table("profiles").upsert({
                             "id": res.user.id,
-                            "balance": 1000
-                        }).execute()
-                        st.info("📩 Registration initiated! Check your email to verify your account.")
+                            "balance": 1000 
+                        }, on_conflict="id").execute()
+                        
+                        st.balloons()
+                        st.info("📩 Account Created! Login Now!")
                     else:
-                        st.error("Registration failed. Please try again.")
+                        st.error("Registration failed. Email might already be in use.")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    # Catch the specific error details for debugging
+                    st.error(f"Vault Error: {e}")
