@@ -5,6 +5,7 @@ import platform
 from supabase import create_client
 
 # --- 1. SUPABASE SETUP ---
+# Ensure these are set in your .streamlit/secrets.toml
 try:
     supabase = create_client(st.secrets["supabase"]["url"], st.secrets["supabase"]["key"])
 except Exception:
@@ -97,20 +98,25 @@ if __name__ == "__main__":
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     is_windows = platform.system() == "Windows"
     
+    # Filenames
     bj_ext = "game.dll" if is_windows else "game.so"
     ttt_ext = "tictactoe.dll" if is_windows else "tictactoe.so"
     ms_ext = "minesweeper.dll" if is_windows else "minesweeper.so"
 
     try:
+        # 1. Blackjack Engine
         bj_path = os.path.join(curr_dir, bj_ext)
         bj_lib = ctypes.CDLL(bj_path)
         
+        # 2. Tic-Tac-Toe Engine
         ttt_path = os.path.join(curr_dir, ttt_ext)
         ttt_lib = ctypes.CDLL(ttt_path)
 
+        # 3. Minesweeper Engine (Configured for 64-bit Pointers)
         ms_path = os.path.join(curr_dir, ms_ext)
         ms_lib = ctypes.CDLL(ms_path)
         
+        # Explicitly define Minesweeper types to prevent OverflowError
         ms_lib.create_game.restype = ctypes.c_void_p
         ms_lib.is_cell_revealed.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
         ms_lib.is_cell_mine.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
@@ -121,14 +127,6 @@ if __name__ == "__main__":
         st.error(f"Engine Failure: Ensure C files are compiled and names match. Error: {e}")
         st.stop()
 
-    # --- UI GHOSTING FIX: State Cleanup Callback ---
-    def reset_game_state():
-        # Keys to wipe to prevent leftover UI from other games appearing
-        keys = ["phase", "player_hand", "dealer_hand", "hands", "board", "game_over", "grid"]
-        for key in keys:
-            if key in st.session_state:
-                del st.session_state[key]
-
     # Sidebar Navigation
     st.sidebar.title("🎰 ARCADE MENU")
     st.sidebar.metric("VAULT BALANCE", f"${st.session_state.balance:,}")
@@ -137,13 +135,9 @@ if __name__ == "__main__":
         st.session_state.clear()
         st.rerun()
     
-    page = st.sidebar.radio(
-        "CHOOSE A TABLE", 
-        ["🏠 HOME", "🃏 BLACKJACK", "⭕ TIC-TAC-TOE", "💣 MINESWEEPER"],
-        on_change=reset_game_state
-    )
+    page = st.sidebar.radio("CHOOSE A TABLE", ["🏠 HOME", "🃏 BLACKJACK", "⭕ TIC-TAC-TOE", "💣 MINESWEEPER"])
 
-    # Admin Panel
+    # Admin Panel (Secret Pit Boss Access)
     ADMIN_EMAIL = "freshlettucev5@gmail.com"
     if st.session_state.user.email == ADMIN_EMAIL:
         st.sidebar.markdown("---")
@@ -157,39 +151,39 @@ if __name__ == "__main__":
         st.divider()
         st.header("🕵️ Pit Boss: Payment Verification")
         claims = supabase.table("payment_claims").select("*").eq("status", "pending").execute()
-        if claims.data:
-            for claim in claims.data:
-                c1, c2, c3 = st.columns([2, 1, 1])
-                c1.write(f"**User:** {claim['user_email']} <br> **UTR:** `{claim['transaction_id']}`", unsafe_allow_html=True)
-                if c2.button("✅ Approve", key=f"a_{claim['id']}"):
-                    u_prof = supabase.table("profiles").select("balance").eq("id", claim['user_id']).single().execute()
-                    new_bal = (u_prof.data['balance'] or 0) + 1000000
-                    supabase.table("profiles").update({"balance": new_bal}).eq("id", claim['user_id']).execute()
-                    supabase.table("payment_claims").update({"status": "approved"}).eq("id", claim['id']).execute()
-                    st.success("Balance Updated!")
-                    st.rerun()
-                if c3.button("❌ Reject", key=f"r_{claim['id']}"):
-                    supabase.table("payment_claims").update({"status": "rejected"}).eq("id", claim['id']).execute()
-                    st.rerun()
+        
+        if not claims.data:
+            st.info("No pending claims.")
+        
+        for claim in claims.data:
+            c1, c2, c3 = st.columns([2, 1, 1])
+            c1.write(f"**User:** {claim['user_email']} <br> **UTR:** `{claim['transaction_id']}`", unsafe_allow_html=True)
+            if c2.button("✅ Approve", key=f"a_{claim['id']}"):
+                u_prof = supabase.table("profiles").select("balance").eq("id", claim['user_id']).single().execute()
+                new_bal = (u_prof.data['balance'] or 0) + 1000000
+                supabase.table("profiles").update({"balance": new_bal}).eq("id", claim['user_id']).execute()
+                supabase.table("payment_claims").update({"status": "approved"}).eq("id", claim['id']).execute()
+                st.success("Balance Updated!")
+                st.rerun()
+            if c3.button("❌ Reject", key=f"r_{claim['id']}"):
+                supabase.table("payment_claims").update({"status": "rejected"}).eq("id", claim['id']).execute()
+                st.rerun()
 
-    # --- GHOSTING FIX: Use st.empty() as a unit-replacing container ---
-    main_container = st.empty()
+    # Page Routing
+    if page == "🏠 HOME":
+        st.title("THE GRAND C-ENGINE ARCADE")
+        st.markdown("Welcome to the most efficient arcade on the web, powered by high-performance C engines.")
+        st.image("https://images.unsplash.com/photo-1596838132731-3301c3fd4317?q=80&w=2070", caption="Step up to the table.")
 
-    with main_container.container():
-        if page == "🏠 HOME":
-            st.title("THE GRAND C-ENGINE ARCADE")
-            st.markdown("Welcome to the most efficient arcade on the web, powered by high-performance C engines.")
-            st.image("https://images.unsplash.com/photo-1596838132731-3301c3fd4317?q=80&w=2070", caption="Step up to the table.")
+    elif page == "🃏 BLACKJACK":
+        from blackjack import run_blackjack
+        run_blackjack(bj_lib)
+        sync_balance_to_db()
+        
+    elif page == "⭕ TIC-TAC-TOE":
+        from tictactoe_ui import run_tictactoe
+        run_tictactoe(ttt_lib)
 
-        elif page == "🃏 BLACKJACK":
-            from blackjack import run_blackjack
-            run_blackjack(bj_lib)
-            sync_balance_to_db()
-            
-        elif page == "⭕ TIC-TAC-TOE":
-            from tictactoe_ui import run_tictactoe
-            run_tictactoe(ttt_lib)
-
-        elif page == "💣 MINESWEEPER":
-            from minesweeper_ui import run_minesweeper
-            run_minesweeper(ms_lib)
+    elif page == "💣 MINESWEEPER":
+        from minesweeper_ui import run_minesweeper
+        run_minesweeper(ms_lib)
