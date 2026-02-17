@@ -94,14 +94,21 @@ if __name__ == "__main__":
     # Engine Loaders
     curr_dir = os.path.dirname(os.path.abspath(__file__))
     is_windows = platform.system() == "Windows"
-    ext = ".dll" if is_windows else ".so"
+    
+    bj_ext = "game.dll" if is_windows else "game.so"
+    ttt_ext = "tictactoe.dll" if is_windows else "tictactoe.so"
+    ms_ext = "minesweeper.dll" if is_windows else "minesweeper.so"
 
     try:
-        bj_lib = ctypes.CDLL(os.path.join(curr_dir, f"game{ext}"))
-        ttt_lib = ctypes.CDLL(os.path.join(curr_dir, f"tictactoe{ext}"))
-        ms_lib = ctypes.CDLL(os.path.join(curr_dir, f"minesweeper{ext}"))
+        bj_path = os.path.join(curr_dir, bj_ext)
+        bj_lib = ctypes.CDLL(bj_path)
         
-        # MS 64-bit Pointer Setup
+        ttt_path = os.path.join(curr_dir, ttt_ext)
+        ttt_lib = ctypes.CDLL(ttt_path)
+
+        ms_path = os.path.join(curr_dir, ms_ext)
+        ms_lib = ctypes.CDLL(ms_path)
+        
         ms_lib.create_game.restype = ctypes.c_void_p
         ms_lib.process_move.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
         ms_lib.force_reveal.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
@@ -109,17 +116,28 @@ if __name__ == "__main__":
         st.error(f"Engine Failure: {e}")
         st.stop()
 
-    # Sidebar
-    st.sidebar.title("🎰 ARCADE")
+    # --- UI GHOSTING FIX: State Cleanup Callback ---
+    def reset_game_state():
+        # Keys to wipe to prevent leftover UI from other games appearing
+        keys = ["phase", "player_hand", "dealer_hand", "hands", "board", "game_over", "grid"]
+        for key in keys:
+            if key in st.session_state:
+                del st.session_state[key]
+
+    # Sidebar Navigation
+    st.sidebar.title("🎰 ARCADE MENU")
     st.sidebar.metric("VAULT BALANCE", f"${st.session_state.balance:,}")
     if st.sidebar.button("🚪 LOGOUT", use_container_width=True):
         st.session_state.clear()
         st.rerun()
     
-    page = st.sidebar.radio("CHOOSE A TABLE", ["🏠 HOME", "🃏 BLACKJACK", "⭕ TIC-TAC-TOE", "💣 MINESWEEPER"])
-    render_high_roller_menu()
+    page = st.sidebar.radio(
+        "CHOOSE A TABLE", 
+        ["🏠 HOME", "🃏 BLACKJACK", "⭕ TIC-TAC-TOE", "💣 MINESWEEPER"],
+        on_change=reset_game_state
+    )
 
-    # Admin View
+    # Admin Panel
     ADMIN_EMAIL = "freshlettucev5@gmail.com"
     if st.session_state.user.email == ADMIN_EMAIL:
         if st.sidebar.button("🛠️ PIT BOSS PANEL", type="primary", use_container_width=True):
@@ -128,61 +146,39 @@ if __name__ == "__main__":
     if st.session_state.get("show_admin"):
         st.header("🕵️ Pit Boss Panel")
         claims = supabase.table("payment_claims").select("*").eq("status", "pending").execute()
-        for claim in claims.data:
-            c1, c2 = st.columns([3, 1])
-            c1.write(f"**{claim['user_email']}** | UTR: `{claim['transaction_id']}`")
-            if c2.button("Approve", key=claim['id']):
-                u_prof = supabase.table("profiles").select("balance").eq("id", claim['user_id']).single().execute()
-                new_bal = (u_prof.data['balance'] or 0) + 1000000
-                supabase.table("profiles").update({"balance": new_bal}).eq("id", claim['user_id']).execute()
-                supabase.table("payment_claims").update({"status": "approved"}).eq("id", claim['id']).execute()
-                st.rerun()
+        if claims.data:
+            for claim in claims.data:
+                c1, c2, c3 = st.columns([2, 1, 1])
+                c1.write(f"**User:** {claim['user_email']} <br> **UTR:** `{claim['transaction_id']}`", unsafe_allow_html=True)
+                if c2.button("✅ Approve", key=f"a_{claim['id']}"):
+                    u_prof = supabase.table("profiles").select("balance").eq("id", claim['user_id']).single().execute()
+                    new_bal = (u_prof.data['balance'] or 0) + 1000000
+                    supabase.table("profiles").update({"balance": new_bal}).eq("id", claim['user_id']).execute()
+                    supabase.table("payment_claims").update({"status": "approved"}).eq("id", claim['id']).execute()
+                    st.success("Balance Updated!")
+                    st.rerun()
+                if c3.button("❌ Reject", key=f"r_{claim['id']}"):
+                    supabase.table("payment_claims").update({"status": "rejected"}).eq("id", claim['id']).execute()
+                    st.rerun()
 
-    # --- HOME PAGE (LEADERBOARDS ONLY) ---
-    if page == "🏠 HOME":
-        from minesweeper_ui import display_ms_leaderboard
-        
-        st.markdown("<h1 style='text-align: center; color: #FFD700;'>🏦 THE GLOBAL VAULT</h1>", unsafe_allow_html=True)
-        
-        # Big Balance Display
-        st.markdown(f"""
-            <div class="stMetric">
-                <h2 style="margin:0; color:#FFD700;">YOUR CURRENT BALANCE</h2>
-                <h1 style="margin:0; font-size: 50px;">${st.session_state.balance:,}</h1>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.write("---")
-        
-        # Leaderboards in a grid
-        st.subheader("📊 Global Rankings")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("### 🃏 Blackjack Whales")
-            st.caption("Top earners by balance")
-            display_ms_leaderboard("balance", "Credits")
+    # --- GHOSTING FIX: Use st.empty() as a unit-replacing container ---
+    main_container = st.empty()
 
-        with col2:
-            st.markdown("### 💣 Minesweeper Pro")
-            st.caption("Top cells cleared")
-            display_ms_leaderboard("cells_cleared", "Cells")
+    with main_container.container():
+        if page == "🏠 HOME":
+            st.title("THE GRAND C-ENGINE ARCADE")
+            st.markdown("Welcome to the most efficient arcade on the web, powered by high-performance C engines.")
+            st.image("https://images.unsplash.com/photo-1596838132731-3301c3fd4317?q=80&w=2070", caption="Step up to the table.")
 
-        with col3:
-            st.markdown("### 💀 Wall of Shame")
-            st.caption("Most mines triggered")
-            display_ms_leaderboard("mines_hit", "Mines")
+        elif page == "🃏 BLACKJACK":
+            from blackjack import run_blackjack
+            run_blackjack(bj_lib)
+            sync_balance_to_db()
+            
+        elif page == "⭕ TIC-TAC-TOE":
+            from tictactoe_ui import run_tictactoe
+            run_tictactoe(ttt_lib)
 
-    # --- ROUTING ---
-    elif page == "🃏 BLACKJACK":
-        from blackjack import run_blackjack
-        run_blackjack(bj_lib)
-        sync_balance_to_db()
-        
-    elif page == "⭕ TIC-TAC-TOE":
-        from tictactoe_ui import run_tictactoe
-        run_tictactoe(ttt_lib)
-
-    elif page == "💣 MINESWEEPER":
-        from minesweeper_ui import run_minesweeper
-        run_minesweeper(ms_lib)
+        elif page == "💣 MINESWEEPER":
+            from minesweeper_ui import run_minesweeper
+            run_minesweeper(ms_lib)
