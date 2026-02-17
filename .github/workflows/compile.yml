@@ -9,12 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Debug - List Files
+        run: |
+          echo "Listing all files in repository to check paths and casing:"
+          ls -R
 
       - name: Compile Libraries
         run: |
-          # Compile all engines to ensure Linux compatibility
+          # Use lowercase filenames by default, but match your repo exactly!
+          # If your file is in a subfolder, add the path (e.g., src/game.c)
           gcc -shared -o game.so -fPIC game.c
           gcc -shared -o tictactoe.so -fPIC tictactoe.c
           gcc -shared -o minesweeper.so -fPIC minesweeper.c
@@ -23,10 +27,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Stage all compiled shared objects
-          git add game.so tictactoe.so minesweeper.so
-          
-          # This prevents the workflow from failing if no changes were made
-          git commit -m "Build: Refresh Linux .so binaries" || echo "No changes to commit"
+          git add *.so
+          git commit -m "Build: Update Linux .so binaries" || exit 0
           git push
