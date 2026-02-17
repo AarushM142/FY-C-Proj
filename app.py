@@ -38,11 +38,11 @@ def render_high_roller_menu():
 
     tab_mobile, tab_desktop = st.sidebar.tabs(["📱 MOBILE", "💻 DESKTOP"])
     with tab_mobile:
-        st.markdown(f'<a href="{upi_url}"><div style="background: linear-gradient(45deg, #FFD700, #FFA500); color: black; text-align: center; padding: 12px; border-radius: 8px; font-weight: bold;">📲 OPEN UPI APP (₹1)</div></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{upi_url}"><div style="background: linear-gradient(45deg, #FFD700, #FFA500); color: black; text-align: center; padding: 12px; border-radius: 8px; font-weight: bold;">📲 OPEN UPI APP (₹1) Win 1 Million Balance! </div></a>', unsafe_allow_html=True)
     with tab_desktop:
         st.image(qr_url, caption="Scan to Pay", use_container_width=True)
 
-    with st.sidebar.expander("✅ I have paid! Claim credits"):
+    with st.sidebar.expander("✅ I have paid! Claim 1 Million Balance!"):
         txn_id = st.text_input("Enter Transaction ID (UTR)")
         if st.button("SUBMIT FOR REVIEW", use_container_width=True):
             if len(txn_id) >= 10:
@@ -53,7 +53,7 @@ def render_high_roller_menu():
                         "transaction_id": txn_id,
                         "status": "pending"
                     }).execute()
-                    st.info("🕒 Submitted! The Pit Boss will review it shortly.")
+                    st.info("🕒 Submitted! The Don will review it shortly.")
                 except Exception:
                     st.error("This ID has already been used.")
             else:
@@ -90,7 +90,7 @@ if __name__ == "__main__":
             # Notification logic for approved payments
             check = supabase.table("payment_claims").select("*").eq("user_id", user_id).eq("status", "approved").execute()
             if check.data:
-                st.toast("💰 Payment Approved! Welcome to the High Roller Club.", icon="💎")
+                st.toast("💰 Payment Approved! Enjoy your perks!.", icon="💎")
         except:
             st.session_state.balance = 1000
 
