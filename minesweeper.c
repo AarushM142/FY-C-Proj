@@ -59,6 +59,7 @@ Game* create_game() {
         }
     }
     game->cellsRevealed = 0;
+    game->minesHit = 0;
     return game;
 }
 
@@ -66,11 +67,16 @@ int is_cell_revealed(Game *game, int r, int c) { return game->board[r][c].isReve
 int is_cell_mine(Game *game, int r, int c) { return game->board[r][c].isMine; }
 int get_adjacent_count(Game *game, int r, int c) { return game->board[r][c].adjacentMines; }
 
+void force_reveal(Game *game, int r, int c) {
+    if (game) floodFill(game, r, c);
+}
+
 int process_move(Game *game, int r, int c) {
     if (game->board[r][c].isMine) {
         game->minesHit++;
-        return (game->minesHit == 1) ? 1 : -1;
+        return (game->minesHit == 1) ? 1 : -1; 
     }
     floodFill(game, r, c);
-    return (game->cellsRevealed == (SIZE * SIZE - MINES)) ? 2 : 0;
+    if (game->cellsRevealed == (SIZE * SIZE - MINES)) return 2;
+    return 0;
 }
