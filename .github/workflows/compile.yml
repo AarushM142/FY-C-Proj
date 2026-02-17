@@ -14,7 +14,7 @@ jobs:
 
       - name: Compile Libraries
         run: |
-          # Compile Game, TicTacToe, and Minesweeper
+          # Compile all engines to ensure Linux compatibility
           gcc -shared -o game.so -fPIC game.c
           gcc -shared -o tictactoe.so -fPIC tictactoe.c
           gcc -shared -o minesweeper.so -fPIC minesweeper.c
@@ -24,9 +24,9 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Add all compiled shared objects
+          # Stage all compiled shared objects
           git add game.so tictactoe.so minesweeper.so
           
-          # Only commit if there are actual binary changes
-          git commit -m "Update compiled Linux libraries (.so)" || echo "No changes to commit"
+          # This prevents the workflow from failing if no changes were made
+          git commit -m "Build: Refresh Linux .so binaries" || echo "No changes to commit"
           git push
