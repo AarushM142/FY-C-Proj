@@ -88,9 +88,7 @@ if __name__ == "__main__":
             st.session_state[balance_flag] = True
             
             # Notification logic for approved payments
-            check = supabase.table("payment_claims").select("*").eq("user_id", user_id).eq("status", "approved").execute()
-            if check.data:
-                st.toast("💰 Payment Approved! Enjoy your perks!.", icon="💎")
+    
         except:
             st.session_state.balance = 1000
 
