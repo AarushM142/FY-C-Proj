@@ -33,6 +33,30 @@ def display_cards(hand, hide_second=False):
     st.markdown(html, unsafe_allow_html=True)
 
 def run_blackjack(game_lib):
+    # --- 🛡️ BUG FIX: INITIALIZE SESSION STATE ---
+    if "phase" not in st.session_state:
+        st.session_state.phase = "betting"
+    if "balance" not in st.session_state:
+        st.session_state.balance = 1000
+    if "player_hand" not in st.session_state:
+        st.session_state.player_hand = []
+    if "dealer_hand" not in st.session_state:
+        st.session_state.dealer_hand = []
+    if "hands" not in st.session_state:
+        st.session_state.hands = []
+    if "current_hand" not in st.session_state:
+        st.session_state.current_hand = 0
+    if "split_active" not in st.session_state:
+        st.session_state.split_active = False
+    if "ace_choice_locked" not in st.session_state:
+        st.session_state.ace_choice_locked = False
+    if "payout_done" not in st.session_state:
+        st.session_state.payout_done = False
+    # --------------------------------------------
+
+    st.markdown("<h1 style='text-align: center; color: #FFD700;'>BLACKJACK 21</h1>", unsafe_allow_html=True)
+    # ... rest of your code ...
+    
     st.markdown("<h1 style='text-align: center; color: #FFD700;'>BLACKJACK 21</h1>", unsafe_allow_html=True)
 
     if st.session_state.phase == "betting":
@@ -237,18 +261,26 @@ def run_blackjack(game_lib):
             if len(current_hand) == 2:
                 can_split_flag = game_lib.can_split(current_hand[0], current_hand[1]) and not st.session_state.split_active
             
-            if can_split_flag and c3.button("SPLIT 💔", use_container_width=True):
-                if st.session_state.balance >= st.session_state.bet:
-                    st.session_state.balance -= st.session_state.bet
-                    # Create second hand with the second card
-                    hand1 = [current_hand[0], game_lib.draw_card()]
-                    hand2 = [current_hand[1], game_lib.draw_card()]
-                    st.session_state.hands = [hand1, hand2]
-                    st.session_state.split_active = True
-                    st.session_state.current_hand = 0
-                    st.session_state.ace_choice_locked = False  # Reset for first split hand
-                    st.session_state.ace_choice = None
-                    st.rerun()
+            if can_split_flag:
+                if c3.button("SPLIT 💔", use_container_width=True):
+                    if st.session_state.balance >= st.session_state.bet:
+                        st.session_state.balance -= st.session_state.bet
+                        # Create second hand with the second card
+                        card1 = current_hand[0]
+                        card2 = current_hand[1]
+                        hand1 = [card1, game_lib.draw_card()]
+                        hand2 = [card2, game_lib.draw_card()]
+                        st.session_state.hands = [hand1, hand2]
+                        st.session_state.split_active = True
+                        st.session_state.current_hand = 0
+                        st.session_state.ace_choice_locked = False  # Reset for first split hand
+                        st.session_state.ace_choice = None
+                        st.rerun()
+                    else:
+                        st.error("❌ Insufficient funds to split!")
+            else:
+                if c3.button("SPLIT 💔", use_container_width=True, disabled=True):
+                    pass
             
             # DOUBLE DOWN button (only on first two cards)
             if len(current_hand) == 2 and c4.button("DOUBLE DOWN 💰", use_container_width=True):
