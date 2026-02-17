@@ -17,7 +17,7 @@ typedef struct {
     int minesHit;
 } Game;
 
-// Internal helper for cascading reveals on safe cells
+// Helper to cascade reveals for safe cells
 void floodFill(Game *game, int r, int c) {
     if (r < 0 || r >= SIZE || c < 0 || c >= SIZE || game->board[r][c].isRevealed) return;
     
@@ -75,11 +75,12 @@ Game* create_game() {
     return game;
 }
 
+// Getters for Python UI
 int is_cell_revealed(Game *game, int r, int c) { return game->board[r][c].isRevealed; }
 int is_cell_mine(Game *game, int r, int c) { return game->board[r][c].isMine; }
 int get_adjacent_count(Game *game, int r, int c) { return game->board[r][c].adjacentMines; }
 
-// FIXED: This now reveals the ENTIRE board regardless of mine status
+// --- THE BUG FIX: EXPORTING THE MISSING SYMBOL ---
 void force_reveal(Game *game) {
     if (!game) return;
     for (int i = 0; i < SIZE; i++) {
@@ -92,9 +93,9 @@ void force_reveal(Game *game) {
 int process_move(Game *game, int r, int c) {
     if (game->board[r][c].isMine) {
         game->minesHit++;
-        return -1; // Loss state
+        return -1; // Loss signal
     }
     floodFill(game, r, c);
-    if (game->cellsRevealed == (SIZE * SIZE - MINES)) return 2; // Win state
+    if (game->cellsRevealed == (SIZE * SIZE - MINES)) return 2; // Win signal
     return 0;
 }
