@@ -1,1 +1,21 @@
+name: Compile C Libraries for Linux
+on: [push, workflow_dispatch] # Runs on every push or manual trigger
 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile Libraries
+        run: |
+          gcc -shared -o game.so -fPIC game.c
+          gcc -shared -o tictactoe.so -fPIC tictactoe.c
+
+      - name: Commit and Push .so files
+        run: |
+          git config --global user.name "compiler-bot"
+          git config --global user.email "bot@github.com"
+          git add *.so
+          git commit -m "Add compiled Linux libraries (.so)" || exit 0
+          git push
