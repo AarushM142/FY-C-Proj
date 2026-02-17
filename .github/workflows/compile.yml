@@ -1,5 +1,9 @@
 name: Compile C Libraries for Linux
-on: [push, workflow_dispatch]
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -9,12 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install GCC
+        run: sudo apt-get update && sudo apt-get install -y gcc
 
       - name: Compile Libraries
         run: |
-          # Compile all engines to ensure Linux compatibility
+          # Use -fPIC for Linux shared objects
           gcc -shared -o game.so -fPIC game.c
           gcc -shared -o tictactoe.so -fPIC tictactoe.c
           gcc -shared -o minesweeper.so -fPIC minesweeper.c
@@ -24,9 +29,9 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Stage all compiled shared objects
+          # Add only the linux binaries
           git add game.so tictactoe.so minesweeper.so
           
-          # This prevents the workflow from failing if no changes were made
-          git commit -m "Build: Refresh Linux .so binaries" || echo "No changes to commit"
+          # Commit if changes exist
+          git commit -m "Build: Update Linux .so binaries" || exit 0
           git push
