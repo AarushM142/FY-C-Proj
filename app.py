@@ -73,6 +73,7 @@ if __name__ == "__main__":
         .stApp { background: radial-gradient(circle, #1a4d1a 0%, #0d260d 100%); color: white; }
         [data-testid="stSidebar"] { background-color: #050505 !important; border-right: 2px solid #FFD700; }
         .stMetric { background-color: rgba(0,0,0,0.6); padding: 20px; border-radius: 15px; border: 2px solid #FFD700; text-align: center; }
+        .admin-box { background-color: rgba(255, 215, 0, 0.1); border: 1px solid #FFD700; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -81,6 +82,10 @@ if __name__ == "__main__":
     if 'user' not in st.session_state:
         render_auth_page(supabase)
         st.stop()
+
+    # Admin State Initialization
+    if "show_admin" not in st.session_state:
+        st.session_state.show_admin = False
 
     # Balance Sync
     user_id = st.session_state.user.id
@@ -109,7 +114,7 @@ if __name__ == "__main__":
         st.error(f"Engine Failure: {e}")
         st.stop()
 
-    # Sidebar
+    # Sidebar Navigation
     st.sidebar.title("🎰 ARCADE")
     st.sidebar.metric("VAULT BALANCE", f"${st.session_state.balance:,}")
     if st.sidebar.button("🚪 LOGOUT", use_container_width=True):
@@ -119,26 +124,50 @@ if __name__ == "__main__":
     page = st.sidebar.radio("CHOOSE A TABLE", ["🏠 HOME", "🃏 BLACKJACK", "⭕ TIC-TAC-TOE", "💣 MINESWEEPER"])
     render_high_roller_menu()
 
-    # Admin View
+    # --- PIT BOSS PANEL LOGIC ---
     ADMIN_EMAIL = "freshlettucev5@gmail.com"
     if st.session_state.user.email == ADMIN_EMAIL:
+        st.sidebar.markdown("---")
         if st.sidebar.button("🛠️ PIT BOSS PANEL", type="primary", use_container_width=True):
-            st.session_state.show_admin = not st.session_state.get("show_admin", False)
+            st.session_state.show_admin = not st.session_state.show_admin
+            st.rerun()
 
-    if st.session_state.get("show_admin"):
-        st.header("🕵️ Pit Boss Panel")
-        claims = supabase.table("payment_claims").select("*").eq("status", "pending").execute()
-        for claim in claims.data:
-            c1, c2 = st.columns([3, 1])
-            c1.write(f"**{claim['user_email']}** | UTR: `{claim['transaction_id']}`")
-            if c2.button("Approve", key=claim['id']):
-                u_prof = supabase.table("profiles").select("balance").eq("id", claim['user_id']).single().execute()
-                new_bal = (u_prof.data['balance'] or 0) + 1000000
-                supabase.table("profiles").update({"balance": new_bal}).eq("id", claim['user_id']).execute()
-                supabase.table("payment_claims").update({"status": "approved"}).eq("id", claim['id']).execute()
-                st.rerun()
+    # Display Admin Panel if toggled ON
+    if st.session_state.show_admin:
+        st.markdown("### 🕵️ Pit Boss Panel")
+        if st.button("❌ Close Admin Panel"):
+            st.session_state.show_admin = False
+            st.rerun()
 
-    # --- HOME PAGE (LEADERBOARDS ONLY) ---
+        try:
+            claims_res = supabase.table("payment_claims").select("*").eq("status", "pending").execute()
+            claims = claims_res.data
+            
+            if not claims:
+                st.info("No pending payment claims found.")
+            else:
+                for claim in claims:
+                    with st.container():
+                        st.markdown(f"""<div class="admin-box">
+                            <strong>User:</strong> {claim['user_email']}<br>
+                            <strong>UTR:</strong> <code>{claim['transaction_id']}</code>
+                        </div>""", unsafe_allow_html=True)
+                        if st.button(f"Approve {claim['transaction_id'][-4:]}", key=f"claim_{claim['id']}"):
+                            # Fetch user's current balance
+                            u_prof = supabase.table("profiles").select("balance").eq("id", claim['user_id']).single().execute()
+                            current_bal = u_prof.data['balance'] if u_prof.data else 0
+                            
+                            # Update balance and claim status
+                            supabase.table("profiles").update({"balance": current_bal + 1000000}).eq("id", claim['user_id']).execute()
+                            supabase.table("payment_claims").update({"status": "approved"}).eq("id", claim['id']).execute()
+                            
+                            st.success(f"Verified! $1M credited to {claim['user_email']}")
+                            st.rerun()
+        except Exception as e:
+            st.error(f"Database Error: {e}")
+        st.markdown("---")
+
+    # --- ROUTING PAGES ---
     if page == "🏠 HOME":
         from minesweeper_ui import display_ms_leaderboard
         
@@ -173,7 +202,6 @@ if __name__ == "__main__":
             st.caption("Most mines triggered")
             display_ms_leaderboard("mines_hit", "Mines")
 
-    # --- ROUTING ---
     elif page == "🃏 BLACKJACK":
         from blackjack import run_blackjack
         run_blackjack(bj_lib)
